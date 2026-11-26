@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111">
+<title>거울 댄스 연습</title>
+<style>
+  :root{
+    --bg:#0f0f12; --panel:#1a1a20; --line:#2c2c35; --text:#f2f2f5; --sub:#9a9aa8;
+    --accent:#ff3d7f; --accent2:#3dd6ff; --ok:#4ade80;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;
+    -webkit-tap-highlight-color:transparent}
+  body{max-width:900px;margin:0 auto;padding:10px 10px 40px}
+  header{display:flex;gap:6px;align-items:center;margin-bottom:8px}
+  header h1{font-size:16px;margin:0 6px 0 2px;white-space:nowrap}
+  #url{flex:1;min-width:0;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text);font-size:15px}
+  button,select,input[type=number],input[type=text]{font:inherit;color:var(--text)}
+  button{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:15px;cursor:pointer;touch-action:manipulation}
+  button:active{transform:scale(.96)}
+  button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+
+  /* ---------- 영상 무대 ---------- */
+  #stage{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:12px;overflow:hidden}
+  #mirrorBox{position:absolute;inset:0;transition:transform .15s}
+  #mirrorBox.mirror{transform:scaleX(-1)}
+  #mirrorBox iframe,#player{width:100%;height:100%;display:block;border:0}
+  #touch{position:absolute;inset:0;z-index:2}
+  #empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--sub);padding:20px;font-size:14px;z-index:1;pointer-events:none}
+  #countdown{position:absolute;inset:0;z-index:4;display:none;align-items:center;justify-content:center;
+    font-size:min(30vw,40vh);font-weight:900;color:#fff;text-shadow:0 0 30px rgba(0,0,0,.8);background:rgba(0,0,0,.25);pointer-events:none}
+  #countdown.show{display:flex}
+  #badge{position:absolute;top:8px;left:8px;z-index:3;font-size:12px;background:rgba(0,0,0,.55);padding:4px 8px;border-radius:8px;pointer-events:none}
+  #toast{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:6;background:rgba(0,0,0,.8);padding:8px 14px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
+  #toast.show{opacity:1}
+  #fsbar{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:5;display:none;gap:6px;
+    background:rgba(20,20,26,.85);padding:8px;border-radius:14px}
+  #fsbar.show{display:flex}
+  #fsbar button{padding:12px 14px;font-size:18px;background:transparent;border-color:#444}
+
+  /* 전체화면 (일반 + 아이폰용 대체) */
+  #stage:fullscreen{width:100vw;height:100vh;aspect-ratio:auto;border-radius:0}
+  #stage:-webkit-full-screen{width:100vw;height:100vh;aspect-ratio:auto;border-radius:0}
+  body.pseudo-fs{overflow:hidden}
+  body.pseudo-fs #stage{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;aspect-ratio:auto;border-radius:0;z-index:100}
+
+  /* ---------- 조작판 ---------- */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:10px}
+  .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .row + .row{margin-top:8px}
+  .grow{flex:1}
+  .label{font-size:13px;color:var(--sub);min-width:64px}
+  .time{font-variant-numeric:tabular-nums;font-size:13px;color:var(--sub);min-width:44px;text-align:center}
+  #seek{width:100%;-webkit-appearance:none;appearance:none;height:28px;background:transparent}
+  #seek::-webkit-slider-runnable-track{height:8px;border-radius:4px;background:var(--track,#333)}
+  #seek::-moz-range-track{height:8px;border-radius:4px;background:var(--track,#333)}
+  #seek::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#fff;margin-top:-6px}
+  #seek::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:#fff;border:0}
+  .big{font-size:20px;padding:12px 16px}
+  .pt{display:flex;align-items:center;gap:4px;background:#111;border:1px solid var(--line);border-radius:10px;padding:4px}
+  .pt b{font-variant-numeric:tabular-nums;min-width:58px;text-align:center;font-size:14px}
+  .pt button{padding:8px 9px;font-size:13px}
+  #rateVal{min-width:64px;text-align:center;font-weight:700;font-size:18px}
+  select,input[type=number],input[type=text]{background:#111;border:1px solid var(--line);border-radius:8px;padding:8px}
+  input[type=number]{width:64px}
+  #steps{width:130px}
+  .status{font-size:13px;color:var(--accent2)}
+  #saved{list-style:none;margin:8px 0 0;padding:0}
+  #saved li{display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px solid var(--line)}
+  #saved li .nm{flex:1;cursor:pointer}
+  #saved li .tm{font-size:12px;color:var(--sub);font-variant-numeric:tabular-nums}
+  #saved li button{padding:6px 10px;font-size:13px}
+  details{margin-top:10px;color:var(--sub);font-size:13px}
+  details table{border-collapse:collapse;margin-top:6px}
+  details td{padding:3px 10px 3px 0}
+  kbd{background:#222;border:1px solid #444;border-radius:4px;padding:1px 5px;font-size:12px;color:var(--text)}
+  .check{display:flex;align-items:center;gap:6px;font-size:14px}
+  .check input{width:20px;height:20px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🪞 거울 댄스</h1>
+  <input id="url" type="text" placeholder="유튜브 링크 붙여넣기" autocomplete="off">
+  <button id="loadBtn" class="primary">열기</button>
+</header>
+
+<div id="stage">
+  <div id="mirrorBox" class="mirror"><div id="player"></div></div>
+  <div id="empty">위에 유튜브 링크를 붙여 넣고 <b>&nbsp;열기</b>를 누르세요</div>
+  <div id="badge"></div>
+  <div id="touch"></div>
+  <div id="countdown"></div>
+  <div id="fsbar">
+    <button data-act="restart" title="구간 처음부터">⏮</button>
+    <button data-act="play" title="재생/일시정지">⏯</button>
+    <button data-act="loop" title="반복">🔁</button>
+    <button data-act="slower" title="느리게">−</button>
+    <button data-act="faster" title="빠르게">＋</button>
+    <button data-act="mirror" title="반전">🪞</button>
+    <button data-act="fs" title="전체화면 끝내기">✕</button>
+  </div>
+  <div id="toast"></div>
+</div>
+
+<!-- 재생 -->
+<div class="panel">
+  <div class="row">
+    <span class="time" id="cur">0:00</span>
+    <input id="seek" class="grow" type="range" min="0" max="1000" value="0" step="1">
+    <span class="time" id="dur">0:00</span>
+  </div>
+  <div class="row">
+    <button id="playBtn" class="big">▶</button>
+    <button id="restartBtn" class="big" title="구간 처음부터 (카운트다운)">⏮ 구간 처음</button>
+    <button id="mirrorBtn" class="on">🪞 반전</button>
+    <button id="fsBtn">⛶ 전체화면</button>
+  </div>
+  <div class="row">
+    <span class="label">속도</span>
+    <button id="slowerBtn">−</button>
+    <span id="rateVal">1배</span>
+    <button id="fasterBtn">＋</button>
+    <button data-rate="0.5">0.5</button>
+    <button data-rate="0.75">0.75</button>
+    <button data-rate="1">1</button>
+  </div>
+</div>
+
+<!-- 구간 반복 -->
+<div class="panel">
+  <div class="row">
+    <span class="label">구간</span>
+    <div class="pt"><button id="setA">A 지정</button><button data-nudge="A,-0.1">◀</button><b id="aVal">--</b><button data-nudge="A,0.1">▶</button></div>
+    <div class="pt"><button id="setB">B 지정</button><button data-nudge="B,-0.1">◀</button><b id="bVal">--</b><button data-nudge="B,0.1">▶</button></div>
+  </div>
+  <div class="row">
+    <button id="loopBtn">🔁 구간 반복 꺼짐</button>
+    <button id="clearAB">구간 지우기</button>
+  </div>
+  <div class="row">
+    <span class="label">카운트다운</span>
+    <select id="cdSel">
+      <option value="0">없음</option>
+      <option value="2">2초</option>
+      <option value="3">3초</option>
+      <option value="4" selected>5·6·7·8</option>
+      <option value="5">5초</option>
+    </select>
+    <label class="check"><input id="beepChk" type="checkbox" checked> 소리</label>
+  </div>
+  <div class="row">
+    <label class="check"><input id="progChk" type="checkbox"> 점점 빠르게</label>
+    <input id="steps" type="text" value="0.5, 0.75, 1" title="단계별 속도 (쉼표로 구분)">
+    <span style="font-size:13px;color:var(--sub)">단계마다</span>
+    <input id="reps" type="number" min="1" max="20" value="2">
+    <span style="font-size:13px;color:var(--sub)">회</span>
+  </div>
+  <div class="row"><span class="status" id="progStatus"></span></div>
+</div>
+
+<!-- 구간 저장 -->
+<div class="panel">
+  <div class="row">
+    <span class="label">구간 저장</span>
+    <input id="secName" class="grow" type="text" placeholder="예: 후렴 안무">
+    <button id="saveSec">저장</button>
+  </div>
+  <ul id="saved"></ul>
+</div>
+
+<details>
+  <summary>단축키 / 발표용 리모컨</summary>
+  <table>
+    <tr><td><kbd>Space</kbd> <kbd>B</kbd> <kbd>.</kbd></td><td>재생 / 일시정지 (리모컨 '화면 끄기' 버튼 포함)</td></tr>
+    <tr><td><kbd>PageDown</kbd> <kbd>→</kbd></td><td>구간 처음부터 (카운트다운)</td></tr>
+    <tr><td><kbd>PageUp</kbd> <kbd>←</kbd></td><td>구간 반복 켜기 / 끄기</td></tr>
+    <tr><td><kbd>[</kbd> <kbd>]</kbd> 또는 <kbd>↓</kbd> <kbd>↑</kbd></td><td>느리게 / 빠르게</td></tr>
+    <tr><td><kbd>A</kbd> <kbd>S</kbd></td><td>A 지정 / B 지정</td></tr>
+    <tr><td><kbd>M</kbd></td><td>좌우 반전</td></tr>
+    <tr><td><kbd>F</kbd></td><td>전체화면</td></tr>
+  </table>
+  <p>전체화면에서 화면을 한 번 톡 누르면 조작 버튼이 나타납니다.</p>
+</details>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+
+  // ---------- 저장소 (막혀 있어도 동작하도록) ----------
+  const mem = {};
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return k in mem ? mem[k] : d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { mem[k] = v; } }
+  };
+
+  // ---------- 상태 ----------
+  const S = {
+    videoId: null, A: null, B: null, loop: false,
+    mirror: store.get('dm_mirror', true),
+    cd: store.get('dm_cd', 4), beep: store.get('dm_beep', true),
+    prog: false, steps: [0.5, 0.75, 1], reps: 2, stage: 0, count: 0,
+    busy: false, cdToken: 0, dragging: false
+  };
+  let player = null, ready = false, apiReady = false, pendingId = null;
+
+  // ---------- 유틸 ----------
+  const fmt = (t, dec) => {
+    if (t == null || isNaN(t)) return '--';
+    const m = Math.floor(t / 60), s = t - m * 60;
+    return dec ? `${m}:${s.toFixed(1).padStart(4, '0')}` : `${m}:${String(Math.floor(s)).padStart(2, '0')}`;
+  };
+  let toastTimer;
+  const toast = msg => {
+    const el = $('toast'); el.textContent = msg; el.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 1600);
+  };
+  const parseId = s => {
+    s = (s || '').trim();
+    if (/^[\w-]{11}$/.test(s)) return s;
+    try {
+      const u = new URL(s.startsWith('http') ? s : 'https://' + s);
+      if (u.hostname.includes('youtu.be')) return u.pathname.slice(1, 12);
+      const v = u.searchParams.get('v'); if (v) return v.slice(0, 11);
+      const m = u.pathname.match(/\/(shorts|embed|live|v)\/([\w-]{11})/); if (m) return m[2];
+    } catch (e) {}
+    return null;
+  };
+
+  // ---------- 소리 (카운트다운 삑) ----------
+  let actx = null;
+  const unlockAudio = () => {
+    try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) {}
+  };
+  const beep = high => {
+    if (!S.beep || !actx) return;
+    try {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.frequency.value = high ? 1320 : 880; o.type = 'sine';
+      g.gain.setValueAtTime(0.0001, actx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.4, actx.currentTime + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 0.15);
+      o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + 0.16);
+    } catch (e) {}
+  };
+  document.addEventListener('pointerdown', unlockAudio, { once: false, passive: true });
+  document.addEventListener('keydown', unlockAudio, { passive: true });
+
+  // ---------- 화면 꺼짐 방지 ----------
+  let wakeLock = null;
+  const keepAwake = async on => {
+    try {
+      if (on && !wakeLock && 'wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => wakeLock = null); }
+      if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+    } catch (e) {}
+  };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && isPlaying()) keepAwake(true); });
+
+  // ---------- 유튜브 플레이어 ----------
+  window.onYouTubeIframeAPIReady = () => { apiReady = true; if (pendingId) loadVideo(pendingId); };
+  const tag = document.createElement('script'); tag.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(tag);
+
+  function loadVideo(id) {
+    S.videoId = id; S.A = S.B = null; S.count = 0; S.stage = 0;
+    setLoop(false);
+    store.set('dm_last', id);
+    $('empty').style.display = 'none';
+    if (!apiReady) { pendingId = id; return; }
+    if (!player) {
+      player = new YT.Player('player', {
+        videoId: id,
+        playerVars: { controls: 0, fs: 0, playsinline: 1, rel: 0, modestbranding: 1, disablekb: 1, iv_load_policy: 3 },
+        events: {
+          onReady: () => { ready = true; updateRate(); },
+          onStateChange: e => {
+            $('playBtn').textContent = e.data === 1 ? '⏸' : '▶';
+            keepAwake(e.data === 1);
+            if (e.data === 1) updateRate();
+          },
+          onError: e => {
+            const msg = {
+              2: '링크가 올바르지 않습니다.',
+              5: '이 기기에서 재생할 수 없는 영상입니다.',
+              100: '영상을 찾을 수 없습니다 (삭제 또는 비공개).',
+              101: '업로더가 외부 재생을 막아 둔 영상입니다. 커버/연습 영상 등 다른 영상을 써 보세요.',
+              150: '업로더가 외부 재생을 막아 둔 영상입니다. 커버/연습 영상 등 다른 영상을 써 보세요.',
+              153: '웹 주소로 열어야 재생됩니다 (파일을 직접 열면 막힐 수 있음).'
+            }[e.data] || ('재생 오류 (' + e.data + ')');
+            $('empty').style.display = 'flex'; $('empty').textContent = msg;
+          }
+        }
+      });
+    } else {
+      player.cueVideoById(id);
+    }
+    renderAB(); renderSaved(); renderProg();
+  }
+
+  const isPlaying = () => ready && player.getPlayerState && player.getPlayerState() === 1;
+  const now = () => (ready ? player.getCurrentTime() : 0);
+
+  function togglePlay() {
+    if (!ready) return;
+    if (S.busy) { cancelCountdown(); player.pauseVideo(); return; }
+    isPlaying() ? player.pauseVideo() : player.playVideo();
+  }
+
+  // ---------- 속도 ----------
+  const rates = () => (ready && player.getAvailablePlaybackRates ? player.getAvailablePlaybackRates() : [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]);
+  function setRate(r) {
+    if (!ready) return;
+    const list = rates();
+    const near = list.reduce((a, b) => Math.abs(b - r) < Math.abs(a - r) ? b : a, list[0]);
+    player.setPlaybackRate(near);
+    setTimeout(updateRate, 150);
+  }
+  function stepRate(dir) {
+    if (!ready) return;
+    const list = rates(), cur = player.getPlaybackRate();
+    let i = list.findIndex(x => Math.abs(x - cur) < 0.001);
+    if (i < 0) i = list.indexOf(1);
+    const j = Math.min(list.length - 1, Math.max(0, i + dir));
+    setRate(list[j]); toast(list[j] + '배');
+  }
+  function updateRate() {
+    if (!ready) return;
+    const r = player.getPlaybackRate();
+    $('rateVal').textContent = r + '배';
+    renderBadge();
+  }
+
+  // ---------- 반전 ----------
+  function setMirror(on) {
+    S.mirror = on; store.set('dm_mirror', on);
+    $('mirrorBox').classList.toggle('mirror', on);
+    $('mirrorBtn').classList.toggle('on', on);
+    renderBadge();
+  }
+
+  // ---------- 구간 ----------
+  function setA() {
+    if (!ready) return;
+    S.A = Math.max(0, now());
+    if (S.B != null && S.B <= S.A + 0.2) S.B = null;
+    renderAB(); toast('A ' + fmt(S.A, 1));
+  }
+  function setB() {
+    if (!ready) return;
+    const t = now();
+    if (S.A == null) S.A = 0;
+    if (t <= S.A + 0.2) { toast('B는 A보다 뒤여야 합니다'); return; }
+    S.B = t;
+    if (!S.loop) setLoop(true);
+    renderAB(); toast('B ' + fmt(S.B, 1));
+  }
+  function nudge(which, d) {
+    if (S[which] == null) return;
+    const dur = ready ? player.getDuration() : 1e9;
+    S[which] = Math.min(dur, Math.max(0, +(S[which] + d).toFixed(2)));
+    if (S.A != null && S.B != null && S.B <= S.A + 0.2) { S[which] = +(S[which] - d).toFixed(2); return; }
+    renderAB();
+    if (ready && !isPlaying()) player.seekTo(S[which], true);
+  }
+  function setLoop(on) {
+    if (on && (S.A == null || S.B == null)) { toast('먼저 A와 B를 지정하세요'); on = false; }
+    S.loop = on; S.count = 0;
+    $('loopBtn').classList.toggle('on', on);
+    $('loopBtn').textContent = on ? '🔁 구간 반복 켜짐' : '🔁 구간 반복 꺼짐';
+    renderBadge(); renderProg();
+  }
+  function renderAB() {
+    $('aVal').textContent = fmt(S.A, 1);
+    $('bVal').textContent = fmt(S.B, 1);
+    paintSeek();
+  }
+  function paintSeek() {
+    const d = ready ? player.getDuration() : 0;
+    if (!d || S.A == null) { $('seek').style.setProperty('--track', '#333'); return; }
+    const a = (S.A / d) * 100, b = ((S.B ?? S.A) / d) * 100;
+    $('seek').style.setProperty('--track',
+      `linear-gradient(90deg,#333 ${a}%,var(--accent) ${a}%,var(--accent) ${Math.max(b, a + 0.5)}%,#333 ${Math.max(b, a + 0.5)}%)`);
+  }
+
+  // ---------- 카운트다운 ----------
+  function cancelCountdown() {
+    S.cdToken++; S.busy = false;
+    $('countdown').classList.remove('show');
+  }
+  function runCountdown(done) {
+    const n = +S.cd;
+    if (!n) { done(); return; }
+    const labels = n === 4 ? ['5', '6', '7', '8'] : Array.from({ length: n }, (_, i) => String(n - i));
+    const token = ++S.cdToken, el = $('countdown');
+    let i = 0;
+    el.classList.add('show');
+    const tick = () => {
+      if (token !== S.cdToken) return;
+      if (i >= labels.length) { el.classList.remove('show'); done(); return; }
+      el.textContent = labels[i]; beep(i === labels.length - 1); i++;
+      setTimeout(tick, 1000);
+    };
+    tick();
+  }
+  function restartSection() {
+    if (!ready) return;
+    cancelCountdown();
+    S.busy = true;
+    player.pauseVideo();
+    player.seekTo(S.A ?? 0, true);
+    runCountdown(() => { S.busy = false; player.playVideo(); });
+  }
+
+  // ---------- 점점 빠르게 ----------
+  function readProg() {
+    const st = $('steps').value.split(/[,\s]+/).map(Number).filter(x => x > 0 && x <= 2);
+    S.steps = st.length ? st : [0.5, 0.75, 1];
+    S.reps = Math.max(1, Math.min(20, +$('reps').value || 2));
+  }
+  function setProg(on) {
+    readProg();
+    S.prog = on; S.stage = 0; S.count = 0;
+    $('progChk').checked = on;
+    if (on) {
+      if (S.A != null && S.B != null && !S.loop) setLoop(true);
+      setRate(S.steps[0]);
+    }
+    renderProg();
+  }
+  function renderProg() {
+    $('progStatus').textContent = S.prog
+      ? `단계 ${S.stage + 1}/${S.steps.length} · ${S.steps[S.stage]}배 · ${Math.min(S.count + 1, S.reps)}/${S.reps}회째` +
+        (S.loop ? '' : '  (구간 반복을 켜야 진행됩니다)')
+      : '';
+  }
+  function onLoopEnd() {
+    S.count++;
+    if (S.prog) {
+      if (S.count >= S.reps && S.stage < S.steps.length - 1) { S.stage++; S.count = 0; toast(S.steps[S.stage] + '배로 올립니다'); }
+      setRate(S.steps[S.stage]);
+      renderProg();
+    }
+    restartSection();
+  }
+
+  // ---------- 감시 루프 ----------
+  setInterval(() => {
+    if (!ready || !player.getCurrentTime) return;
+    const t = player.getCurrentTime(), d = player.getDuration() || 0;
+    $('cur').textContent = fmt(t); $('dur').textContent = fmt(d);
+    if (!S.dragging && d) $('seek').value = Math.round((t / d) * 1000);
+    if (S.loop && S.A != null && S.B != null && !S.busy && isPlaying() && t >= S.B) onLoopEnd();
+  }, 50);
+
+  $('seek').addEventListener('input', () => { S.dragging = true; });
+  $('seek').addEventListener('change', () => {
+    S.dragging = false;
+    if (!ready) return;
+    cancelCountdown();
+    player.seekTo(($('seek').value / 1000) * player.getDuration(), true);
+  });
+
+  // ---------- 상단 배지 ----------
+  function renderBadge() {
+    const parts = [];
+    if (ready) parts.push(player.getPlaybackRate() + '배');
+    if (S.mirror) parts.push('반전');
+    if (S.loop) parts.push('🔁 ' + fmt(S.A, 1) + '–' + fmt(S.B, 1));
+    $('badge').textContent = parts.join(' · ');
+    $('badge').style.display = parts.length ? 'block' : 'none';
+  }
+
+  // ---------- 전체화면 ----------
+  const isFs = () => !!(document.fullscreenElement || document.webkitFullscreenElement) || document.body.classList.contains('pseudo-fs');
+  function toggleFs() {
+    const st = $('stage');
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document); return;
+    }
+    if (document.body.classList.contains('pseudo-fs')) { document.body.classList.remove('pseudo-fs'); return; }
+    const req = st.requestFullscreen || st.webkitRequestFullscreen;
+    if (req) {
+      Promise.resolve(req.call(st)).then(() => {
+        try { screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => {}); } catch (e) {}
+      }).catch(() => document.body.classList.add('pseudo-fs'));
+    } else {
+      document.body.classList.add('pseudo-fs'); // 아이폰: 화면을 가로로 돌려 주세요
+      toast('휴대폰을 가로로 돌려 주세요');
+    }
+  }
+
+  // 영상 위 터치: 평소엔 재생/정지, 전체화면에선 조작 버튼 표시
+  let barTimer;
+  const showBar = () => {
+    $('fsbar').classList.add('show');
+    clearTimeout(barTimer); barTimer = setTimeout(() => $('fsbar').classList.remove('show'), 3500);
+  };
+  $('touch').addEventListener('click', () => { isFs() ? showBar() : togglePlay(); });
+  $('fsbar').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    e.stopPropagation(); showBar();
+    ({ restart: restartSection, play: togglePlay, loop: () => setLoop(!S.loop), slower: () => stepRate(-1),
+       faster: () => stepRate(1), mirror: () => setMirror(!S.mirror), fs: toggleFs })[b.dataset.act]();
+  });
+
+  // ---------- 저장된 구간 ----------
+  const secKey = () => 'dm_sec_' + S.videoId;
+  function renderSaved() {
+    const ul = $('saved'); ul.innerHTML = '';
+    if (!S.videoId) return;
+    store.get(secKey(), []).forEach((s, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="nm"></span><span class="tm">${fmt(s.A, 1)}–${fmt(s.B, 1)}</span><button>불러오기</button><button>삭제</button>`;
+      li.querySelector('.nm').textContent = s.name;
+      const load = () => { S.A = s.A; S.B = s.B; renderAB(); setLoop(true); restartSection(); };
+      li.querySelector('.nm').onclick = load;
+      li.querySelectorAll('button')[0].onclick = load;
+      li.querySelectorAll('button')[1].onclick = () => {
+        const arr = store.get(secKey(), []); arr.splice(i, 1); store.set(secKey(), arr); renderSaved();
+      };
+      ul.appendChild(li);
+    });
+  }
+  $('saveSec').onclick = () => {
+    if (!S.videoId || S.A == null || S.B == null) { toast('먼저 A와 B를 지정하세요'); return; }
+    const arr = store.get(secKey(), []);
+    const name = $('secName').value.trim() || `구간 ${arr.length + 1}`;
+    arr.push({ name, A: S.A, B: S.B }); store.set(secKey(), arr);
+    $('secName').value = ''; renderSaved(); toast('저장했습니다');
+  };
+
+  // ---------- 버튼 연결 ----------
+  const open = () => {
+    const id = parseId($('url').value);
+    if (!id) { toast('유튜브 링크를 확인해 주세요'); return; }
+    store.set('dm_url', $('url').value.trim());
+    loadVideo(id);
+  };
+  $('loadBtn').onclick = open;
+  $('url').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); open(); } });
+  $('playBtn').onclick = togglePlay;
+  $('restartBtn').onclick = restartSection;
+  $('mirrorBtn').onclick = () => setMirror(!S.mirror);
+  $('fsBtn').onclick = toggleFs;
+  $('slowerBtn').onclick = () => stepRate(-1);
+  $('fasterBtn').onclick = () => stepRate(1);
+  document.querySelectorAll('[data-rate]').forEach(b => b.onclick = () => { if (S.prog) setProg(false); setRate(+b.dataset.rate); });
+  $('setA').onclick = setA;
+  $('setB').onclick = setB;
+  document.querySelectorAll('[data-nudge]').forEach(b => b.onclick = () => { const [w, d] = b.dataset.nudge.split(','); nudge(w, +d); });
+  $('loopBtn').onclick = () => setLoop(!S.loop);
+  $('clearAB').onclick = () => { S.A = S.B = null; setLoop(false); renderAB(); };
+  $('cdSel').value = String(S.cd);
+  $('cdSel').onchange = () => { S.cd = +$('cdSel').value; store.set('dm_cd', S.cd); };
+  $('beepChk').checked = S.beep;
+  $('beepChk').onchange = () => { S.beep = $('beepChk').checked; store.set('dm_beep', S.beep); };
+  $('progChk').onchange = () => setProg($('progChk').checked);
+  $('steps').onchange = () => { if (S.prog) setProg(true); };
+  $('reps').onchange = () => { readProg(); renderProg(); };
+
+  // ---------- 키보드 / 발표용 리모컨 ----------
+  document.addEventListener('keydown', e => {
+    const tg = e.target.tagName;
+    if (tg === 'INPUT' || tg === 'SELECT' || tg === 'TEXTAREA') return;
+    const k = e.key;
+    const act = {
+      ' ': togglePlay, 'b': togglePlay, 'B': togglePlay, '.': togglePlay, 'MediaPlayPause': togglePlay,
+      'PageDown': restartSection, 'ArrowRight': restartSection,
+      'PageUp': () => setLoop(!S.loop), 'ArrowLeft': () => setLoop(!S.loop),
+      '[': () => stepRate(-1), ']': () => stepRate(1), 'ArrowDown': () => stepRate(-1), 'ArrowUp': () => stepRate(1),
+      'a': setA, 'A': setA, 's': setB, 'S': setB,
+      'm': () => setMirror(!S.mirror), 'M': () => setMirror(!S.mirror),
+      'f': toggleFs, 'F': toggleFs
+    }[k];
+    if (act) { e.preventDefault(); act(); }
+  });
+
+  // ---------- 시작 ----------
+  setMirror(S.mirror);
+  renderBadge();
+  const params = new URLSearchParams(location.search);
+  const start = params.get('v') || store.get('dm_url', '');
+  if (start) { $('url').value = start; const id = parseId(start); if (id) loadVideo(id); }
+})();
+</script>
+</body>
+</html>
